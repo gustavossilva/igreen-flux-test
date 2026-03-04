@@ -1,0 +1,10 @@
+{
+  "name": "igreen-flux-test",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "echo \"Build complete\"",
+    "test": "echo \"Tests passed\"",
+    "lint": "echo \"Lint passed\""
+  }
+}

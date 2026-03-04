@@ -1,0 +1,102 @@
+name: CI - Build & Test
+
+on:
+  repository_dispatch:
+    types: [launchpad_build]
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.commit_hash || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Notify iGreen Flux - Build Started
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "build",
+              "id": "${{ github.event.client_payload.build_id }}",
+              "status": "in_progress",
+              "run_id": "${{ github.run_id }}"
+            }'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Send Log - Dependencies Installed
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "build",
+              "id": "${{ github.event.client_payload.build_id }}",
+              "status": "in_progress",
+              "log_line": "Dependencies installed successfully"
+            }'
+
+      - name: Lint
+        run: npm run lint --if-present
+
+      - name: Test
+        run: npm test --if-present
+
+      - name: Send Log - Tests Passed
+        if: github.event_name == 'repository_dispatch'
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "build",
+              "id": "${{ github.event.client_payload.build_id }}",
+              "status": "in_progress",
+              "log_line": "All tests passed"
+            }'
+
+      - name: Build
+        run: npm run build --if-present
+
+      - name: Notify iGreen Flux - Build Success
+        if: github.event_name == 'repository_dispatch' && success()
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "build",
+              "id": "${{ github.event.client_payload.build_id }}",
+              "status": "success",
+              "run_id": "${{ github.run_id }}"
+            }'
+
+      - name: Notify iGreen Flux - Build Failed
+        if: github.event_name == 'repository_dispatch' && failure()
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "build",
+              "id": "${{ github.event.client_payload.build_id }}",
+              "status": "failure",
+              "run_id": "${{ github.run_id }}"
+            }'
+
+      - name: Notify iGreen Flux - Push Webhook
+        if: github.event_name == 'push'
+        run: |
+          echo "Push event processed. Commits will be ingested via GitHub webhook."

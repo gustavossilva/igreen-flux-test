@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  repository_dispatch:
+    types: [launchpad_deploy]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.commit_hash }}
+
+      - name: Notify iGreen Flux - Deploy Started
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "deploy",
+              "id": "${{ github.event.client_payload.deploy_id }}",
+              "status": "in_progress",
+              "run_id": "${{ github.run_id }}"
+            }'
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build --if-present
+
+      # ============================================
+      # Replace this section with your actual deploy
+      # commands (e.g., kubectl, terraform, AWS CDK)
+      # ============================================
+      - name: Deploy to ${{ github.event.client_payload.environment }}
+        env:
+          ENVIRONMENT: ${{ github.event.client_payload.environment }}
+          COMMIT_HASH: ${{ github.event.client_payload.commit_hash }}
+        run: |
+          echo "Deploying commit $COMMIT_HASH to $ENVIRONMENT..."
+          echo "Running migrations..."
+          sleep 2
+          echo "Updating containers..."
+          sleep 3
+          echo "Running health checks..."
+          sleep 2
+          echo "Deploy to $ENVIRONMENT complete!"
+
+      - name: Notify iGreen Flux - Deploy Success
+        if: success()
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "deploy",
+              "id": "${{ github.event.client_payload.deploy_id }}",
+              "status": "success",
+              "run_id": "${{ github.run_id }}"
+            }'
+
+      - name: Notify iGreen Flux - Deploy Failed
+        if: failure()
+        run: |
+          curl -s -X POST "${{ github.event.client_payload.callback_url }}" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "type": "deploy",
+              "id": "${{ github.event.client_payload.deploy_id }}",
+              "status": "failure",
+              "run_id": "${{ github.run_id }}"
+            }'
