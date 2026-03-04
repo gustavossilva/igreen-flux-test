@@ -7,3 +7,4 @@ It contains GitHub Actions workflows that integrate with iGreen Flux via
 test
 test
 test
+test
